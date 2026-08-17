@@ -14,7 +14,7 @@ st.title("🏙️ CivicVision AI")
 st.subheader("AI-Powered Public Infrastructure Monitoring System")
 
 st.write(
-    "Upload an image to analyze it using computer vision."
+    "Upload an infrastructure image to detect potential public infrastructure issues using computer vision."
 )
 
 # Load AI model
@@ -24,7 +24,7 @@ def load_model():
 
 model = load_model()
 
-# Image uploader
+# Upload image
 uploaded_file = st.file_uploader(
     "📷 Upload an infrastructure image",
     type=["jpg", "jpeg", "png"]
@@ -36,21 +36,22 @@ if uploaded_file is not None:
 
     st.image(
         image,
-        caption="Uploaded Image",
+        caption="Uploaded Infrastructure Image",
         use_container_width=True
     )
 
-    if st.button("🔍 Analyze Image"):
+    if st.button("🔍 Analyze Infrastructure"):
 
-        with st.spinner("AI is analyzing the image..."):
+        with st.spinner("AI is analyzing the infrastructure..."):
 
             results = model.predict(
                 source=image,
                 conf=0.25
             )
 
-        st.success("Analysis completed!")
+        st.success("✅ Analysis completed!")
 
+        # Detection image
         result_image = results[0].plot()
 
         st.image(
@@ -59,9 +60,14 @@ if uploaded_file is not None:
             use_container_width=True
         )
 
-        st.subheader("📊 Detected Objects")
+        st.subheader("📊 Detection Results")
+
+        detections = 0
 
         for box in results[0].boxes:
+
+            detections += 1
+
             class_id = int(box.cls[0])
             confidence = float(box.conf[0])
 
@@ -70,4 +76,9 @@ if uploaded_file is not None:
             st.write(
                 f"**{class_name}** — "
                 f"Confidence: {confidence:.2%}"
+            )
+
+        if detections == 0:
+            st.info(
+                "No objects were detected by the current AI model."
             )
