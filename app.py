@@ -229,8 +229,9 @@ if uploaded_file is not None:
     st.image(
         annotated_image,
         caption="YOLO Infrastructure Detection",
-        use_container_width=True
-    )
+    channels="RGB",
+    use_container_width=True
+)
 
 
     # -----------------------------------------------------
