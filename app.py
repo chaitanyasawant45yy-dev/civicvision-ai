@@ -81,4 +81,4 @@ if uploaded_file is not None:
         if detections == 0:
             st.info(
                 "No objects were detected by the current AI model."
-            )
+            
