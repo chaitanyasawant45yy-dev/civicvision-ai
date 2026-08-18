@@ -5,9 +5,9 @@ from pathlib import Path
 import numpy as np
 
 
-# ---------------------------------------------------------
-# PAGE CONFIGURATION
-# ---------------------------------------------------------
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 
 st.set_page_config(
     page_title="CivicVision AI",
@@ -16,26 +16,22 @@ st.set_page_config(
 )
 
 
-# ---------------------------------------------------------
-# FIND YOLO MODEL AUTOMATICALLY
-# ---------------------------------------------------------
+# =========================================================
+# MODEL FINDER
+# =========================================================
 
 model_files = list(Path(".").glob("*.pt"))
 
 if not model_files:
-    st.error(
-        "YOLO model not found. Please upload your trained .pt model "
-        "to the repository."
-    )
+    st.error("YOLO model not found. Please upload a .pt model.")
     st.stop()
 
-# Prefer files containing "best"
-best_models = [f for f in model_files if "best" in f.name.lower()]
+best_models = [
+    f for f in model_files
+    if "best" in f.name.lower()
+]
 
-if best_models:
-    MODEL_PATH = str(best_models[0])
-else:
-    MODEL_PATH = str(model_files[0])
+MODEL_PATH = str(best_models[0] if best_models else model_files[0])
 
 
 @st.cache_resource
@@ -46,27 +42,52 @@ def load_model():
 model = load_model()
 
 
-# ---------------------------------------------------------
+# =========================================================
 # HEADER
-# ---------------------------------------------------------
+# =========================================================
 
 st.title("🏙️ CivicVision AI")
 
 st.subheader(
-    "AI-Powered Public Infrastructure Monitoring & Risk Assessment"
+    "AI-Powered Public Infrastructure Monitoring & Smart Maintenance"
 )
 
 st.write(
-    "Upload an infrastructure image and CivicVision AI will detect "
-    "visible issues, estimate civic risk and recommend maintenance priority."
+    "Detect visible infrastructure problems, estimate civic risk, "
+    "and prioritize maintenance using AI-assisted decision support."
 )
 
 st.divider()
 
 
-# ---------------------------------------------------------
-# IMAGE UPLOAD
-# ---------------------------------------------------------
+# =========================================================
+# INPUTS
+# =========================================================
+
+st.subheader("📍 Infrastructure Context")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    road_type = st.selectbox(
+        "🛣️ Road Importance",
+        [
+            "Local Road",
+            "Main Road",
+            "Highway / Major Road"
+        ]
+    )
+
+with col2:
+    traffic_level = st.selectbox(
+        "🚗 Traffic Level",
+        [
+            "Low",
+            "Medium",
+            "High"
+        ]
+    )
+
 
 uploaded_file = st.file_uploader(
     "📷 Upload an infrastructure image",
@@ -74,9 +95,9 @@ uploaded_file = st.file_uploader(
 )
 
 
-# ---------------------------------------------------------
-# MAIN ANALYSIS
-# ---------------------------------------------------------
+# =========================================================
+# ANALYSIS
+# =========================================================
 
 if uploaded_file is not None:
 
@@ -90,7 +111,7 @@ if uploaded_file is not None:
 
     st.divider()
 
-    with st.spinner("🤖 CivicVision AI is analysing the image..."):
+    with st.spinner("🤖 CivicVision AI is analysing the infrastructure..."):
 
         results = model.predict(
             source=np.array(image),
@@ -100,14 +121,18 @@ if uploaded_file is not None:
 
         result = results[0]
 
+        # YOLO returns BGR image
         annotated_image = result.plot()
+
+        # Convert BGR → RGB
+        annotated_image = annotated_image[:, :, ::-1]
 
         boxes = result.boxes
 
         detection_count = len(boxes)
 
         # -------------------------------------------------
-        # DETECTION INFORMATION
+        # CONFIDENCE
         # -------------------------------------------------
 
         confidences = []
@@ -128,7 +153,7 @@ if uploaded_file is not None:
         )
 
         # -------------------------------------------------
-        # ESTIMATE DETECTED AREA
+        # DETECTED AREA
         # -------------------------------------------------
 
         image_width, image_height = image.size
@@ -144,10 +169,10 @@ if uploaded_file is not None:
 
                 x1, y1, x2, y2 = box
 
-                box_width = max(0, x2 - x1)
-                box_height = max(0, y2 - y1)
+                width = max(0, x2 - x1)
+                height = max(0, y2 - y1)
 
-                total_detected_area += box_width * box_height
+                total_detected_area += width * height
 
         damage_percentage = (
             total_detected_area / image_area * 100
@@ -156,98 +181,160 @@ if uploaded_file is not None:
         )
 
         # -------------------------------------------------
-        # CIVIC IMPACT SCORE
+        # TRAFFIC SCORE
         # -------------------------------------------------
 
-        confidence_score = average_confidence * 40
+        traffic_score = {
+            "Low": 5,
+            "Medium": 15,
+            "High": 25
+        }[traffic_level]
 
-        area_score = min(damage_percentage * 2, 30)
+        # -------------------------------------------------
+        # ROAD IMPORTANCE SCORE
+        # -------------------------------------------------
 
-        object_score = min(detection_count * 10, 20)
+        road_score = {
+            "Local Road": 5,
+            "Main Road": 15,
+            "Highway / Major Road": 25
+        }[road_type]
 
-        impact_score = round(
-            confidence_score +
-            area_score +
-            object_score
+        # -------------------------------------------------
+        # AI DAMAGE SCORE
+        # -------------------------------------------------
+
+        confidence_score = average_confidence * 30
+
+        area_score = min(damage_percentage * 2, 20)
+
+        detection_score = min(detection_count * 5, 10)
+
+        # -------------------------------------------------
+        # SMART MAINTENANCE PRIORITY
+        # -------------------------------------------------
+
+        priority_score = round(
+            confidence_score
+            + area_score
+            + detection_score
+            + traffic_score
+            + road_score
         )
 
-        impact_score = max(0, min(100, impact_score))
+        priority_score = max(
+            0,
+            min(100, priority_score)
+        )
 
         # -------------------------------------------------
         # SEVERITY
         # -------------------------------------------------
 
-        if impact_score >= 75:
+        if priority_score >= 80:
             severity = "Critical"
-        elif impact_score >= 55:
+
+        elif priority_score >= 60:
             severity = "High"
-        elif impact_score >= 30:
+
+        elif priority_score >= 40:
             severity = "Medium"
+
         else:
             severity = "Low"
-
-        # -------------------------------------------------
-        # MAINTENANCE PRIORITY
-        # -------------------------------------------------
-
-        if severity == "Critical":
-            priority = "Immediate"
-            response = "Dispatch maintenance team immediately."
-
-        elif severity == "High":
-            priority = "High"
-            response = "Schedule repair within 24–48 hours."
-
-        elif severity == "Medium":
-            priority = "Medium"
-            response = "Schedule physical inspection and plan maintenance."
-
-        else:
-            priority = "Low"
-            response = "Monitor the location during the next inspection."
 
         # -------------------------------------------------
         # SAFETY RISK
         # -------------------------------------------------
 
-        if impact_score >= 75:
+        if priority_score >= 80:
             safety_risk = "Very High"
-        elif impact_score >= 55:
+
+        elif priority_score >= 60:
             safety_risk = "High"
-        elif impact_score >= 30:
+
+        elif priority_score >= 40:
             safety_risk = "Moderate"
+
         else:
             safety_risk = "Low"
 
+        # -------------------------------------------------
+        # RESPONSE TIME
+        # -------------------------------------------------
 
-    # -----------------------------------------------------
-    # AI DETECTION RESULT
-    # -----------------------------------------------------
+        if priority_score >= 80:
+
+            priority = "IMMEDIATE"
+
+            response_time = "Within 6 hours"
+
+            recommendation = (
+                "Dispatch an inspection or emergency maintenance team "
+                "immediately."
+            )
+
+        elif priority_score >= 60:
+
+            priority = "HIGH"
+
+            response_time = "Within 24–48 hours"
+
+            recommendation = (
+                "Schedule a physical inspection and maintenance "
+                "within 24–48 hours."
+            )
+
+        elif priority_score >= 40:
+
+            priority = "MEDIUM"
+
+            response_time = "Within 7 days"
+
+            recommendation = (
+                "Add the location to the upcoming maintenance schedule."
+            )
+
+        else:
+
+            priority = "LOW"
+
+            response_time = "Monitor"
+
+            recommendation = (
+                "Monitor the location during the next infrastructure "
+                "inspection."
+            )
+
+
+    # =====================================================
+    # DETECTION RESULT
+    # =====================================================
 
     st.subheader("🎯 AI Detection Result")
 
     st.image(
         annotated_image,
         caption="YOLO Infrastructure Detection",
-    channels="RGB",
-    use_container_width=True
-)
+        channels="RGB",
+        use_container_width=True
+    )
 
 
-    # -----------------------------------------------------
-    # CIVIC DASHBOARD
-    # -----------------------------------------------------
+    # =====================================================
+    # SMART PRIORITY DASHBOARD
+    # =====================================================
 
     st.divider()
 
-    st.subheader("🧠 Civic Risk Assessment")
+    st.subheader("🧠 Smart Civic Risk Assessment")
 
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric(
-            "Civic Impact",
-            f"{impact_score}/100"
+            "Maintenance Score",
+            f"{priority_score}/100"
         )
 
     with col2:
@@ -269,119 +356,143 @@ if uploaded_file is not None:
         )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # DETECTION DETAILS
-    # -----------------------------------------------------
+    # =====================================================
 
-    st.subheader("📊 Detection Details")
+    st.subheader("📊 AI Detection Details")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.metric(
-            "Objects Detected",
+            "Issues Detected",
             detection_count
         )
 
     with col2:
         st.metric(
-            "Best Confidence",
+            "AI Confidence",
             f"{highest_confidence * 100:.1f}%"
         )
 
     with col3:
         st.metric(
-            "Estimated Damage Area",
+            "Visible Damage",
             f"{damage_percentage:.2f}%"
         )
 
 
-    # -----------------------------------------------------
-    # PRIORITY EXPLANATION
-    # -----------------------------------------------------
+    # =====================================================
+    # CONTEXT ANALYSIS
+    # =====================================================
 
-    st.subheader("💡 Why this score?")
+    st.subheader("🌐 Infrastructure Context")
 
-    if detection_count == 0:
+    col1, col2, col3 = st.columns(3)
 
-        st.info(
-            "No infrastructure issue was detected with the current "
-            "confidence threshold. Consider checking the image quality "
-            "or using another image."
-        )
+    with col1:
+        st.write("🛣️ **Road Importance**")
+        st.write(road_type)
 
-    else:
+    with col2:
+        st.write("🚗 **Traffic Level**")
+        st.write(traffic_level)
 
-        st.write(
-            f"CivicVision AI detected **{detection_count} visible issue(s)** "
-            f"with an average confidence of "
-            f"**{average_confidence * 100:.1f}%**."
-        )
-
-        st.write(
-            f"The estimated detected area is approximately "
-            f"**{damage_percentage:.2f}%** of the image."
-        )
-
-        st.write(
-            f"Based on these indicators, the current civic impact score "
-            f"is **{impact_score}/100**, resulting in a "
-            f"**{severity} severity** assessment."
-        )
+    with col3:
+        st.write("⏱️ **Recommended Response**")
+        st.write(response_time)
 
 
-    # -----------------------------------------------------
+    # =====================================================
+    # WHY THE SCORE
+    # =====================================================
+
+    st.subheader("💡 Why this priority score?")
+
+    st.write(
+        f"CivicVision AI detected **{detection_count} visible issue(s)** "
+        f"with an AI confidence of **{highest_confidence * 100:.1f}%**."
+    )
+
+    st.write(
+        f"The estimated visible detected area is "
+        f"**{damage_percentage:.2f}%** of the image."
+    )
+
+    st.write(
+        f"The selected road importance is **{road_type}** and "
+        f"traffic level is **{traffic_level}**."
+    )
+
+    st.write(
+        f"Combining AI detection evidence with infrastructure context "
+        f"produced a maintenance priority score of "
+        f"**{priority_score}/100**."
+    )
+
+
+    # =====================================================
     # RECOMMENDED ACTION
-    # -----------------------------------------------------
+    # =====================================================
 
     st.subheader("🛠️ Recommended Action")
 
-    if priority == "Immediate":
+    if priority == "IMMEDIATE":
 
         st.error(
-            f"🚨 {response}"
+            f"🚨 {recommendation}"
         )
 
-    elif priority == "High":
+    elif priority == "HIGH":
 
         st.warning(
-            f"⚠️ {response}"
+            f"⚠️ {recommendation}"
         )
 
     else:
 
         st.info(
-            f"ℹ️ {response}"
+            f"ℹ️ {recommendation}"
         )
 
 
-    # -----------------------------------------------------
-    # CIVIC DECISION SUMMARY
-    # -----------------------------------------------------
+    # =====================================================
+    # DECISION CARD
+    # =====================================================
 
     st.divider()
 
-    st.subheader("📋 Civic Decision Summary")
+    st.subheader("📋 Civic Decision Card")
 
-    summary = f"""
-**Issue Status:** {"Detected" if detection_count > 0 else "Not Detected"}
-
-**Civic Impact Score:** {impact_score}/100
-
-**Severity:** {severity}
+    st.markdown(
+        f"""
+### 🚨 Infrastructure Issue Detected
 
 **Maintenance Priority:** {priority}
 
+**Priority Score:** {priority_score}/100
+
+**Severity:** {severity}
+
 **Safety Risk:** {safety_risk}
 
-**Detection Confidence:** {highest_confidence * 100:.1f}%
+**AI Confidence:** {highest_confidence * 100:.1f}%
 
-**Estimated Visible Damage:** {damage_percentage:.2f}%
+**Road Importance:** {road_type}
 
-**Recommended Response:** {response}
+**Traffic Level:** {traffic_level}
+
+**Visible Damage:** {damage_percentage:.2f}%
+
+**Recommended Response:** {response_time}
+
+### 🛠️ Action
+
+{recommendation}
 """
+    )
 
-    st.markdown(summary)
 
 else:
 
@@ -390,9 +501,9 @@ else:
     )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # FOOTER
-# ---------------------------------------------------------
+# =========================================================
 
 st.divider()
 
